@@ -1,0 +1,9 @@
+node_modules/
+.env
+.env.local
+config.js
+training-data/
+data/
+*.log
+.DS_Store
+Thumbs.db

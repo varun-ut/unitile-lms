@@ -1,0 +1,18 @@
+{
+  "name": "united-learn",
+  "version": "0.2.0",
+  "private": true,
+  "description": "LMS for Unitile & UniVicoustic — Supabase-backed static frontend.",
+  "scripts": {
+    "dev": "node server.js",
+    "seed": "node supabase/seed.js",
+    "seed:supabase": "cross-env STORAGE_MODE=supabase node supabase/seed.js",
+    "upload:pdfs": "node supabase/upload-pdfs.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3"
+  }
+}

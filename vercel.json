@@ -1,5 +1,7 @@
 {
+  "framework": null,
   "buildCommand": "bash vercel-build.sh",
+  "outputDirectory": ".",
   "cleanUrls": true,
   "trailingSlash": false,
   "rewrites": [

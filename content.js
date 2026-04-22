@@ -1995,7 +1995,7 @@ window.SEED_RESOURCES = {
     { title: "Do's & Don'ts", file: `${TD_UVA}/SOP/Do's & Don'ts.pdf`, kind: 'pdf', group: 'Handling' },
     { title: 'Handling & Storage Guidelines', file: `${TD_UVA}/SOP/Handling & Storage Guidelines.doc`, kind: 'doc', group: 'Handling' },
     { title: 'Maintenance & Cleaning Guide', file: `${TD_UVA}/SOP/Maintenance and Cleaning Guide.pdf`, kind: 'pdf', group: 'Handling' },
-    { title: 'SOP — Dealer Onboarding Process', file: `${TD_UVA}/SOP/SOP__Dealer_Onboarding_Process_–_UniAcoustics.pdf`, kind: 'pdf', group: 'Channel' }
+    { title: 'SOP — Dealer Onboarding Process', file: `${TD_UVA}/SOP/SOP__Dealer_Onboarding_Process_-_UniAcoustics.pdf`, kind: 'pdf', group: 'Channel' }
   ],
   'uva-7': [
     { title: 'Digital Catalog (external)', file: 'https://catalog.univicoustic.com/', kind: 'link' }

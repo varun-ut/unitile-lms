@@ -113,7 +113,7 @@ async function upsert(table, rows, onConflict) {
       course_id: courseId, order: i + 1, title: r.title, kind: r.kind || 'pdf', group_name: r.group || null,
       file_url: r.kind === 'link'
         ? r.file
-        : (useStorage ? `${STORAGE_URL}/${encodeURI(r.file)}` : r.file)
+        : (useStorage ? `${STORAGE_URL}/${r.file.replace(/^training-data\//, '')}` : r.file)
     }));
     if (rows.length) {
       const { error } = await supa.from('resources').insert(rows);

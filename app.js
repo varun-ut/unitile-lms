@@ -88,7 +88,129 @@ async function loadCatalog(myId, isAdmin) {
 const AppCtx = createContext(null);
 const useApp = () => useContext(AppCtx);
 
-function AppProvider({ children }) {
+// ---------- Demo provider — runs the app off localStorage when Supabase ----------
+// isn't configured.  Gives a working local preview without any backend setup.
+// Same api shape as SupabaseAppProvider so UI is agnostic.
+const DEMO_LS = 'unitedLearn.demo.v1';
+const demoLoad = () => { try { return JSON.parse(localStorage.getItem(DEMO_LS)) || null; } catch(e) { return null; } };
+const demoSave = (s) => localStorage.setItem(DEMO_LS, JSON.stringify(s));
+const demoDefaultProgress = () => ({ lessonsDone: {}, quizScores: {}, capstoneScores: {}, certificates: [] });
+
+const demoBootstrap = () => {
+  const stored = demoLoad();
+  if (stored) return stored;
+  const admin = { id: 'u-admin', name: 'Demo Admin', email: 'admin@united-group.in',
+    password: 'admin123', role: 'admin', designation: 'Administrator', division: 'both', unit: 'HQ',
+    createdAt: new Date().toISOString(), progress: demoDefaultProgress() };
+  const learners = (window.SEED_EMPLOYEES || []).map(e => ({
+    id: uid(), name: e.name, email: e.email, password: 'learner123', role: 'learner',
+    designation: e.designation, division: e.division, unit: e.unit,
+    createdAt: new Date().toISOString(), progress: demoDefaultProgress()
+  }));
+  const s = {
+    users: [admin, ...learners],
+    courses: (window.SEED_COURSES || []).map(c => ({ ...c, resources: (window.SEED_RESOURCES && window.SEED_RESOURCES[c.id]) || [] })),
+    capstones: (window.SEED_CAPSTONES || []).map(c => ({ ...c })),
+    trainers: (window.SEED_TRAINERS || []).map(t => ({ ...t })),
+    divisions: window.SEED_DIVISIONS,
+    designations: window.SEED_DESIGNATIONS,
+    assignments: [],
+    announcements: [],
+    currentUserId: null
+  };
+  demoSave(s);
+  return s;
+};
+
+function DemoAppProvider({ children }) {
+  const [state, setState] = useState(demoBootstrap);
+  useEffect(() => { demoSave(state); }, [state]);
+  const api = useMemo(() => ({
+    state,
+    currentUser: () => state.users.find(u => u.id === state.currentUserId) || null,
+    async login(email, password) {
+      const u = state.users.find(x => x.email.toLowerCase() === email.toLowerCase() && x.password === password);
+      if (!u) return { ok: false, msg: 'Invalid email or password.' };
+      setState(s => ({ ...s, currentUserId: u.id }));
+      return { ok: true, user: u };
+    },
+    async logout() { setState(s => ({ ...s, currentUserId: null })); },
+    async signup(data) {
+      if (!/@united-group\.in$/i.test(data.email)) return { ok: false, msg: 'Email must end with @united-group.in' };
+      if (state.users.some(u => u.email.toLowerCase() === data.email.toLowerCase())) return { ok: false, msg: 'An account with this email already exists.' };
+      const newUser = { id: uid(), role: 'learner', createdAt: new Date().toISOString(), progress: demoDefaultProgress(), ...data };
+      setState(s => ({ ...s, users: [...s.users, newUser], currentUserId: newUser.id }));
+      return { ok: true };
+    },
+    async updateUser(userId, patch) { setState(s => ({ ...s, users: s.users.map(u => u.id === userId ? { ...u, ...patch } : u) })); },
+    async deleteUser(userId)         { setState(s => ({ ...s, users: s.users.filter(u => u.id !== userId) })); },
+    async recordLessonDone(courseId, lessonId) {
+      setState(s => { const uId = s.currentUserId; return { ...s, users: s.users.map(u => {
+        if (u.id !== uId) return u;
+        const key = `${courseId}::${lessonId}`;
+        return { ...u, progress: { ...u.progress, lessonsDone: { ...u.progress.lessonsDone, [key]: new Date().toISOString() } } };
+      })}; });
+    },
+    async recordQuizScore(courseId, scorePct) {
+      setState(s => { const uId = s.currentUserId; return { ...s, users: s.users.map(u => {
+        if (u.id !== uId) return u;
+        const prev = u.progress.quizScores[courseId] || 0;
+        return { ...u, progress: { ...u.progress, quizScores: { ...u.progress.quizScores, [courseId]: Math.max(prev, scorePct) } } };
+      })}; });
+    },
+    async recordCapstoneScore(capstoneId, scorePct) {
+      setState(s => { const uId = s.currentUserId; return { ...s, users: s.users.map(u => {
+        if (u.id !== uId) return u;
+        const certs = [...(u.progress.certificates || [])];
+        if (scorePct >= 75 && !certs.find(c => c.id === capstoneId)) certs.push({ id: capstoneId, earnedAt: new Date().toISOString(), score: scorePct });
+        return { ...u, progress: { ...u.progress, capstoneScores: { ...u.progress.capstoneScores, [capstoneId]: Math.max(u.progress.capstoneScores[capstoneId] || 0, scorePct) }, certificates: certs } };
+      })}; });
+    },
+    async addCourse(course)      { setState(s => ({ ...s, courses: [...s.courses, { ...course, id: course.id || uid(), lessons: course.lessons || [], quiz: course.quiz || [], order: s.courses.length + 1 }] })); },
+    async updateCourse(id, patch) { setState(s => ({ ...s, courses: s.courses.map(c => c.id === id ? { ...c, ...patch } : c) })); },
+    async deleteCourse(id)        { setState(s => ({ ...s, courses: s.courses.filter(c => c.id !== id) })); },
+    async addLesson(courseId, lesson) { setState(s => ({ ...s, courses: s.courses.map(c => c.id === courseId ? { ...c, lessons: [...c.lessons, { ...lesson, id: lesson.id || uid() }] } : c) })); },
+    async updateLesson(courseId, lessonId, patch) { setState(s => ({ ...s, courses: s.courses.map(c => c.id === courseId ? { ...c, lessons: c.lessons.map(l => l.id === lessonId ? { ...l, ...patch } : l) } : c) })); },
+    async deleteLesson(courseId, lessonId)        { setState(s => ({ ...s, courses: s.courses.map(c => c.id === courseId ? { ...c, lessons: c.lessons.filter(l => l.id !== lessonId) } : c) })); },
+    async addQuizQuestion(courseId, q)  { setState(s => ({ ...s, courses: s.courses.map(c => c.id === courseId ? { ...c, quiz: [...c.quiz, q] } : c) })); },
+    async deleteQuizQuestion(courseId, idx) { setState(s => ({ ...s, courses: s.courses.map(c => c.id === courseId ? { ...c, quiz: c.quiz.filter((_, i) => i !== idx) } : c) })); },
+    async addTrainer(t)           { setState(s => ({ ...s, trainers: [...s.trainers, { ...t, id: 't' + uid() }] })); },
+    async updateTrainer(id, p)    { setState(s => ({ ...s, trainers: s.trainers.map(t => t.id === id ? { ...t, ...p } : t) })); },
+    async deleteTrainer(id)       { setState(s => ({ ...s, trainers: s.trainers.filter(t => t.id !== id) })); },
+    async assignCourseToUser(courseId, userIds) {
+      setState(s => { const pairs = userIds.map(uId => ({ id: uid(), courseId, userId: uId, assignedAt: new Date().toISOString() }));
+        const filtered = s.assignments.filter(a => !(a.courseId === courseId && userIds.includes(a.userId)));
+        return { ...s, assignments: [...filtered, ...pairs] }; });
+    },
+    async unassignCourse(courseId, userId) { setState(s => ({ ...s, assignments: s.assignments.filter(a => !(a.courseId === courseId && a.userId === userId)) })); },
+    async postAnnouncement(msg, audience)  { setState(s => ({ ...s, announcements: [{ id: uid(), msg, audience, postedAt: new Date().toISOString() }, ...s.announcements] })); },
+    async deleteAnnouncement(id)           { setState(s => ({ ...s, announcements: s.announcements.filter(a => a.id !== id) })); },
+    isVisibleToUser(course, user) {
+      if (!user) return false;
+      if (user.role === 'admin') return true;
+      if (course.division && user.division !== 'both' && course.division !== 'both' && course.division !== user.division) return false;
+      if (course.accessRoles && course.accessRoles.length && !course.accessRoles.includes('all') && !course.accessRoles.includes(user.designation)) return false;
+      const assigned = state.assignments.some(a => a.userId === user.id && a.courseId === course.id);
+      const open = !course.accessRoles || course.accessRoles.includes('all');
+      return open || assigned;
+    }
+  }), [state]);
+  return <AppCtx.Provider value={api}>
+    {!state.currentUserId && <DemoModeBanner/>}
+    {children}
+  </AppCtx.Provider>;
+}
+
+function DemoModeBanner() {
+  return (
+    <div className="fixed bottom-3 right-3 z-40 max-w-xs bg-amber-50 border border-amber-300 rounded-xl shadow-lg p-3 text-xs">
+      <div className="font-bold text-amber-900">Demo mode (local-only)</div>
+      <div className="text-amber-800 mt-0.5">Supabase not configured — progress saves to this browser. Paste keys into <code>config.js</code> to go multi-user.</div>
+    </div>
+  );
+}
+
+function SupabaseAppProvider({ children }) {
   const [state, setState] = useState({ loading: true, session: null, profile: null, catalog: null, error: null });
 
   const refresh = useCallback(async () => {
@@ -846,7 +968,7 @@ function CoursePage({ courseId, nav }) {
         </div>
       </header>
       <div className="max-w-6xl mx-auto grid md:grid-cols-[280px,1fr] gap-6 p-6">
-        <aside className="md:sticky md:top-24 h-max space-y-3">
+        <aside className="md:sticky md:top-24 md:max-h-[calc(100vh-7rem)] md:overflow-y-auto scrollbar-thin space-y-3 pr-1">
           <div className="bg-white border rounded-2xl p-3">
             <div className="text-xs uppercase font-semibold text-slate-500 px-2 pt-1 pb-2">Lessons</div>
             {course.lessons.map((l, i) => (
@@ -861,6 +983,8 @@ function CoursePage({ courseId, nav }) {
               </button>
             ))}
           </div>
+          <ExercisePanel course={course}/>
+          <VideoPanel course={course}/>
           <ResourcePanel course={course}/>
         </aside>
         <main className="bg-white border rounded-2xl p-6 md:p-8">
@@ -876,6 +1000,629 @@ function CoursePage({ courseId, nav }) {
     </div>
   );
 }
+
+// ---------- Video Panel (YouTube suggestions) ----------
+function VideoPanel({ course }) {
+  const videos = (window.SEED_VIDEOS && window.SEED_VIDEOS[course.id]) || [];
+  const [open, setOpen] = useState(true);
+  if (!videos.length) return null;
+  return (
+    <div className="bg-white border rounded-2xl overflow-hidden">
+      <button onClick={() => setOpen(o => !o)} className="w-full px-3 py-2.5 flex items-center justify-between hover:bg-slate-50 bg-gradient-to-r from-red-50 to-orange-50">
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded-md bg-gradient-to-br from-red-500 to-red-700 text-white flex items-center justify-center text-xs shadow-sm">▶</div>
+          <span className="text-xs uppercase font-semibold text-slate-700">Watch & learn</span>
+          <span className="text-xs text-slate-500">({videos.length})</span>
+        </div>
+        <span className={cx('text-slate-400 transition-transform', open && 'rotate-90')}>▸</span>
+      </button>
+      {open && <div className="p-2 space-y-2 border-t">{videos.map((v, i) => <VideoCard key={i} video={v}/>)}</div>}
+    </div>
+  );
+}
+
+function VideoCard({ video }) {
+  const [thumbErr, setThumbErr] = useState(false);
+  const url = video.ytId
+    ? `https://www.youtube.com/watch?v=${video.ytId}`
+    : `https://www.youtube.com/results?search_query=${encodeURIComponent(video.query || video.title)}`;
+  const hasThumb = video.ytId && !thumbErr;
+  const topicGradients = {
+    sound: 'from-purple-500 via-blue-500 to-cyan-400',
+    wave: 'from-cyan-500 to-blue-600',
+    db: 'from-amber-500 to-orange-600',
+    echo: 'from-indigo-500 to-purple-600',
+    panel: 'from-emerald-500 to-teal-600',
+    nrc: 'from-teal-500 to-cyan-600',
+    absorber: 'from-green-500 to-emerald-600',
+    test: 'from-violet-500 to-pink-500',
+    floor: 'from-amber-600 to-orange-600',
+    datacenter: 'from-slate-700 to-blue-700',
+    cleanroom: 'from-sky-400 to-blue-500',
+    airflow: 'from-blue-400 to-cyan-500',
+    cable: 'from-zinc-600 to-slate-800',
+    ceiling: 'from-slate-400 to-slate-700',
+    load: 'from-red-500 to-orange-600',
+    esd: 'from-yellow-500 to-red-600',
+    fire: 'from-red-600 to-orange-500',
+    install: 'from-orange-500 to-amber-500',
+    market: 'from-emerald-400 to-teal-500',
+    green: 'from-green-600 to-emerald-500',
+    baffle: 'from-pink-500 to-rose-600',
+    wood: 'from-amber-700 to-yellow-800',
+    production: 'from-slate-600 to-zinc-700',
+    storage: 'from-blue-500 to-indigo-600',
+    sales: 'from-fuchsia-500 to-pink-600',
+    design: 'from-rose-400 to-pink-500',
+    auditorium: 'from-purple-600 to-fuchsia-700',
+  };
+  const topicIcons = {
+    sound: '🔊', wave: '〰️', db: '📊', echo: '⏱️', panel: '🟦', nrc: '📈', absorber: '🌀', test: '🧪',
+    floor: '🏗️', datacenter: '🖥️', cleanroom: '🧼', airflow: '💨', cable: '🔌', ceiling: '⬛',
+    load: '⚖️', esd: '⚡', fire: '🔥', install: '🔧', market: '📈', green: '🌿', baffle: '🎭',
+    wood: '🪵', production: '🏭', storage: '📦', sales: '🤝', design: '🎨', auditorium: '🎭'
+  };
+  const grad = topicGradients[video.topic] || 'from-red-500 via-red-600 to-orange-500';
+  const icon = topicIcons[video.topic] || '🎥';
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer"
+       className="block rounded-lg overflow-hidden hover:ring-2 hover:ring-red-300 transition group">
+      <div className={cx('aspect-video relative bg-gradient-to-br', grad)}>
+        {hasThumb && (
+          <img src={`https://img.youtube.com/vi/${video.ytId}/mqdefault.jpg`} alt=""
+               onError={() => setThumbErr(true)}
+               className="absolute inset-0 w-full h-full object-cover"/>
+        )}
+        {!hasThumb && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="text-4xl opacity-40">{icon}</div>
+          </div>
+        )}
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors"/>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="yt-play-btn w-10 h-10 bg-white/95 rounded-full flex items-center justify-center shadow-lg">
+            <div className="w-0 h-0 border-y-[7px] border-y-transparent border-l-[11px] border-l-red-600 ml-1"/>
+          </div>
+        </div>
+        {video.duration && (
+          <span className="absolute bottom-1 right-1 bg-black/80 text-white text-[10px] px-1.5 py-0.5 rounded font-medium">{video.duration}</span>
+        )}
+      </div>
+      <div className="p-2">
+        <div className="text-xs font-semibold text-slate-900 leading-snug line-clamp-2 group-hover:text-red-600">{video.title}</div>
+        <div className="text-[10px] text-slate-500 mt-0.5">▶ YouTube · tap to open</div>
+      </div>
+    </a>
+  );
+}
+
+// ---------- Exercise Panel (interactive labs) ----------
+function ExercisePanel({ course }) {
+  const ids = (window.SEED_EXERCISES && window.SEED_EXERCISES[course.id]) || [];
+  const list = ids.map(id => EXERCISES[id]).filter(Boolean);
+  const [open, setOpen] = useState(true);
+  const [active, setActive] = useState(null);
+  if (!list.length) return null;
+  return (
+    <>
+      <div className="bg-white border rounded-2xl overflow-hidden">
+        <button onClick={() => setOpen(o => !o)} className="w-full px-3 py-2.5 flex items-center justify-between hover:bg-slate-50 bg-gradient-to-r from-fuchsia-50 via-purple-50 to-indigo-50">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-md bg-gradient-to-br from-purple-500 to-fuchsia-600 text-white flex items-center justify-center text-xs shadow-sm">🎯</div>
+            <span className="text-xs uppercase font-semibold text-slate-700">Try it yourself</span>
+            <span className="text-xs text-slate-500">({list.length})</span>
+          </div>
+          <span className={cx('text-slate-400 transition-transform', open && 'rotate-90')}>▸</span>
+        </button>
+        {open && (
+          <div className="p-2 space-y-1 border-t">
+            {list.map((e, i) => (
+              <button key={i} onClick={() => setActive(e.id)}
+                      className="w-full text-left p-2 rounded-lg hover:bg-purple-50 flex items-start gap-2 border border-transparent hover:border-purple-200 transition">
+                <span className="text-xl mt-0.5">{e.icon}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-semibold text-slate-900 leading-snug">{e.title}</div>
+                  <div className="text-[10px] text-slate-500 mt-0.5 leading-snug">{e.hint}</div>
+                </div>
+                <span className="text-purple-500 text-xs font-bold mt-0.5">▶</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      {active && <ExerciseModal id={active} onClose={() => setActive(null)}/>}
+    </>
+  );
+}
+
+function ExerciseModal({ id, onClose }) {
+  const entry = EXERCISES[id];
+  if (!entry) return null;
+  const Body = entry.component;
+  return (
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="px-5 py-4 border-b bg-gradient-to-r from-purple-600 via-fuchsia-600 to-pink-600 text-white flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">{entry.icon}</span>
+            <div>
+              <div className="text-xs font-bold uppercase tracking-wide opacity-90">Interactive Lab</div>
+              <div className="font-bold text-lg">{entry.title}</div>
+            </div>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center">✕</button>
+        </div>
+        <div className="p-5 overflow-y-auto">
+          <Body/>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Web Audio helpers ----------
+let _audioCtx = null;
+const getAudioCtx = () => {
+  if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (_audioCtx.state === 'suspended') _audioCtx.resume();
+  return _audioCtx;
+};
+
+// Make an impulse response buffer for ConvolverNode reverb with given RT60 seconds.
+function makeImpulse(rt60Sec) {
+  const ctx = getAudioCtx();
+  const length = Math.max(0.1, rt60Sec) * ctx.sampleRate;
+  const ir = ctx.createBuffer(2, length, ctx.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const data = ir.getChannelData(ch);
+    for (let i = 0; i < length; i++) {
+      // exponentially decaying white noise → cheap but convincing reverb
+      data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, 3);
+    }
+  }
+  return ir;
+}
+
+// Play a short "clap" synthesized from filtered noise burst.
+function playClap(targetNode) {
+  const ctx = getAudioCtx();
+  const buf = ctx.createBuffer(1, ctx.sampleRate * 0.05, ctx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+  const src = ctx.createBufferSource(); src.buffer = buf;
+  const filter = ctx.createBiquadFilter(); filter.type = 'bandpass'; filter.frequency.value = 1800; filter.Q.value = 0.7;
+  const gain = ctx.createGain(); gain.gain.value = 0.8;
+  src.connect(filter); filter.connect(gain); gain.connect(targetNode || ctx.destination);
+  src.start();
+}
+
+function playTone(freq, durationMs = 800, volume = 0.2) {
+  const ctx = getAudioCtx();
+  const osc = ctx.createOscillator(); const g = ctx.createGain();
+  osc.type = 'sine'; osc.frequency.value = freq;
+  g.gain.value = 0;
+  g.gain.linearRampToValueAtTime(volume, ctx.currentTime + 0.02);
+  g.gain.linearRampToValueAtTime(volume, ctx.currentTime + durationMs / 1000 - 0.05);
+  g.gain.linearRampToValueAtTime(0, ctx.currentTime + durationMs / 1000);
+  osc.connect(g); g.connect(ctx.destination);
+  osc.start();
+  osc.stop(ctx.currentTime + durationMs / 1000);
+}
+
+// ---------- Individual exercise components ----------
+function HearingRangeTest() {
+  const [freq, setFreq] = useState(1000);
+  const play = () => playTone(freq, 1200, 0.15);
+  const audible = freq >= 20 && freq <= 20000;
+  const bandLabel = freq < 60 ? 'Sub-bass' : freq < 250 ? 'Bass' : freq < 2000 ? 'Midrange' : freq < 6000 ? 'Upper mid' : freq < 12000 ? 'Presence' : 'Brilliance';
+  return (
+    <div>
+      <p className="text-slate-700">Human ears typically hear <b>20 Hz – 20 kHz</b>. Sweep the slider, press play, and find the edges of your own hearing.</p>
+      <div className="mt-5 p-5 rounded-xl bg-gradient-to-br from-cyan-50 to-blue-50 border border-cyan-200">
+        <div className="text-center">
+          <div className="text-5xl font-extrabold text-blue-700">{freq < 1000 ? freq.toFixed(0) : (freq/1000).toFixed(freq < 2000 ? 2 : 1) + 'k'} Hz</div>
+          <div className="text-sm text-slate-600 mt-1">{bandLabel} band</div>
+        </div>
+        <input type="range" min="20" max="20000" step="10" value={freq} onChange={e => setFreq(+e.target.value)}
+               className="w-full mt-4 accent-blue-600"/>
+        <div className="flex justify-between text-[10px] text-slate-500 mt-1"><span>20</span><span>250</span><span>1k</span><span>4k</span><span>16k</span><span>20k</span></div>
+        <div className="mt-4 text-center">
+          <button onClick={play} className="px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-lg shadow-blue-500/30">▶ Play 1.2 s tone</button>
+        </div>
+      </div>
+      <div className="mt-4 text-sm text-slate-600">
+        <b>Tips:</b> Speech sits between 250 Hz and 4 kHz — that's the acoustic design "money band". High-frequency loss (above 8 kHz) is common with age.
+        <br/><b>Safety:</b> Start with a low system volume. Don't crank frequencies below 30 Hz or above 15 kHz on speakers.
+      </div>
+    </div>
+  );
+}
+
+function LoudnessDBLab() {
+  const [a, setA] = useState(60), [b, setB] = useState(60);
+  const combined = Math.round(10 * Math.log10(Math.pow(10, a/10) + Math.pow(10, b/10)) * 10) / 10;
+  const pct = (v) => Math.min(100, (v / 120) * 100);
+  return (
+    <div>
+      <p className="text-slate-700">Add two sound sources. See why the math surprises people: two 60 dB sources make <b>63 dB</b>, not 120.</p>
+      <div className="mt-5 space-y-4">
+        <div>
+          <div className="flex items-center justify-between text-sm"><span className="font-semibold">Source A</span><span className="font-mono font-bold text-blue-700">{a} dB</span></div>
+          <input type="range" min="0" max="100" value={a} onChange={e => setA(+e.target.value)} className="w-full accent-blue-600"/>
+          <div className="meter mt-1"><div className="fill" style={{ width: `${100 - pct(a)}%`, right: 0, left: 'auto' }}/></div>
+        </div>
+        <div>
+          <div className="flex items-center justify-between text-sm"><span className="font-semibold">Source B</span><span className="font-mono font-bold text-emerald-700">{b} dB</span></div>
+          <input type="range" min="0" max="100" value={b} onChange={e => setB(+e.target.value)} className="w-full accent-emerald-600"/>
+          <div className="meter mt-1"><div className="fill" style={{ width: `${100 - pct(b)}%`, right: 0, left: 'auto' }}/></div>
+        </div>
+      </div>
+      <div className="mt-6 p-5 rounded-xl bg-gradient-to-br from-purple-50 to-pink-50 border border-purple-200 text-center">
+        <div className="text-xs uppercase font-bold text-purple-700">Combined</div>
+        <div className="text-5xl font-extrabold text-purple-800 mt-1">{combined} dB</div>
+        <div className="text-xs text-slate-600 mt-2">= 10 × log₁₀(10^{(a/10).toFixed(1)} + 10^{(b/10).toFixed(1)})</div>
+      </div>
+      <div className="mt-4 text-sm text-slate-600">
+        <b>Rules of thumb:</b> Doubling sources → +3 dB. 10× sources → +10 dB. A source 10 dB below another contributes almost nothing.
+      </div>
+    </div>
+  );
+}
+
+function PitchCompare() {
+  const rand = () => Math.floor(200 + Math.random() * 1800);
+  const [pair, setPair] = useState(null);
+  const [score, setScore] = useState({ r: 0, w: 0 });
+  const [msg, setMsg] = useState('');
+  const newPair = () => {
+    const base = rand();
+    const gap = 20 + Math.floor(Math.random() * 120);
+    const second = Math.random() < 0.5 ? base + gap : base - gap;
+    setPair({ a: base, b: second, hint: `Hz difference ≈ ${gap} Hz` });
+    setMsg('');
+  };
+  const play = (f) => playTone(f, 700);
+  const guess = (answer) => {
+    if (!pair) return;
+    const correct = pair.b > pair.a ? 'second' : 'first';
+    if (answer === correct) { setScore(s => ({ ...s, r: s.r + 1 })); setMsg('✅ Correct! ' + pair.hint); }
+    else { setScore(s => ({ ...s, w: s.w + 1 })); setMsg('❌ Not this time — try another round.'); }
+  };
+  return (
+    <div>
+      <p className="text-slate-700">Train your pitch discrimination. Play the two tones, pick which sounds higher.</p>
+      {!pair ? (
+        <div className="mt-5 text-center">
+          <button onClick={newPair} className="btn-primary">Start round</button>
+        </div>
+      ) : (
+        <div className="mt-5 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <button onClick={() => play(pair.a)} className="p-6 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 text-white font-bold shadow-lg hover:scale-105 transition">▶ First tone</button>
+            <button onClick={() => play(pair.b)} className="p-6 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 text-white font-bold shadow-lg hover:scale-105 transition">▶ Second tone</button>
+          </div>
+          <div className="text-center text-sm text-slate-600">Which sounded <b>higher</b>?</div>
+          <div className="grid grid-cols-2 gap-3">
+            <button onClick={() => guess('first')}  className="p-3 rounded-lg border-2 border-blue-300 bg-blue-50 hover:bg-blue-100 font-semibold">First</button>
+            <button onClick={() => guess('second')} className="p-3 rounded-lg border-2 border-emerald-300 bg-emerald-50 hover:bg-emerald-100 font-semibold">Second</button>
+          </div>
+          {msg && <div className="text-center text-sm font-medium mt-1">{msg}</div>}
+          <div className="flex justify-center gap-4 text-sm">
+            <div>✅ Right: <b className="text-emerald-700">{score.r}</b></div>
+            <div>❌ Wrong: <b className="text-red-700">{score.w}</b></div>
+            <button onClick={newPair} className="underline text-brand-700">New pair →</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReverbDemo() {
+  const [rt60, setRt60] = useState(0.8);
+  const irRef = useRef(null);
+  useEffect(() => { irRef.current = makeImpulse(rt60); }, [rt60]);
+  const play = () => {
+    const ctx = getAudioCtx();
+    const dry = ctx.createGain(); dry.gain.value = 0.35;
+    const wet = ctx.createGain(); wet.gain.value = 0.85;
+    const conv = ctx.createConvolver(); conv.buffer = irRef.current || makeImpulse(rt60);
+    dry.connect(ctx.destination); conv.connect(wet); wet.connect(ctx.destination);
+    // Merge both paths
+    playClap(dry); playClap(conv);
+  };
+  const label = rt60 < 0.4 ? 'Studio / treated room' : rt60 < 0.9 ? 'Office / conference' : rt60 < 1.6 ? 'Classroom / hall' : rt60 < 2.4 ? 'Concert hall' : 'Cavernous';
+  return (
+    <div>
+      <p className="text-slate-700">Reverberation time (RT₆₀) controls how "alive" a room feels. Slide it and clap.</p>
+      <div className="mt-5 p-5 rounded-xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200">
+        <div className="flex items-baseline justify-between mb-2">
+          <span className="text-sm font-semibold text-slate-700">RT₆₀</span>
+          <div className="text-right"><span className="text-3xl font-extrabold text-orange-700">{rt60.toFixed(1)}</span><span className="text-orange-700"> s</span></div>
+        </div>
+        <input type="range" min="0.1" max="3.0" step="0.1" value={rt60} onChange={e => setRt60(+e.target.value)} className="w-full accent-orange-600"/>
+        <div className="text-center text-xs text-orange-800 mt-1 font-medium">{label}</div>
+        <div className="text-center mt-4">
+          <button onClick={play} className="px-6 py-3 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold shadow-lg">👏 Clap in this room</button>
+        </div>
+      </div>
+      <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
+        <button onClick={() => setRt60(0.3)} className="p-2 rounded-lg bg-emerald-50 border border-emerald-200 font-semibold text-emerald-800">Studio 0.3s</button>
+        <button onClick={() => setRt60(0.7)} className="p-2 rounded-lg bg-blue-50 border border-blue-200 font-semibold text-blue-800">Office 0.7s</button>
+        <button onClick={() => setRt60(2.0)} className="p-2 rounded-lg bg-amber-50 border border-amber-200 font-semibold text-amber-800">Concert 2.0s</button>
+      </div>
+    </div>
+  );
+}
+
+function EchoVsReverb() {
+  const playWith = (delayMs) => {
+    const ctx = getAudioCtx();
+    playClap();
+    if (delayMs > 0) {
+      const delay = ctx.createDelay(1.2); delay.delayTime.value = delayMs / 1000;
+      const g = ctx.createGain(); g.gain.value = 0.6;
+      delay.connect(g); g.connect(ctx.destination);
+      playClap(delay);
+    }
+  };
+  const playReverb = () => {
+    const ctx = getAudioCtx();
+    const conv = ctx.createConvolver(); conv.buffer = makeImpulse(1.6);
+    const wet = ctx.createGain(); wet.gain.value = 1.0;
+    conv.connect(wet); wet.connect(ctx.destination);
+    playClap(); playClap(conv);
+  };
+  return (
+    <div>
+      <p className="text-slate-700">An <b>echo</b> is a single delayed copy you can distinguish. <b>Reverberation</b> is thousands of reflections blurred together.</p>
+      <div className="mt-5 grid gap-3">
+        <button onClick={() => playWith(0)}   className="p-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-left">
+          <div className="font-bold">No reflections (anechoic)</div>
+          <div className="text-xs text-slate-600 mt-0.5">Dry sound — how your voice sounds outdoors on grass</div>
+        </button>
+        <button onClick={() => playWith(40)}  className="p-4 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-200 text-left">
+          <div className="font-bold text-blue-800">Short delay: 40 ms (flutter)</div>
+          <div className="text-xs text-slate-600 mt-0.5">Too short to hear as echo — sounds like a tone change ("flutter echo")</div>
+        </button>
+        <button onClick={() => playWith(400)} className="p-4 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-left">
+          <div className="font-bold text-amber-800">Clear echo: 400 ms</div>
+          <div className="text-xs text-slate-600 mt-0.5">Classic canyon / empty hall echo</div>
+        </button>
+        <button onClick={playReverb} className="p-4 rounded-xl bg-purple-50 hover:bg-purple-100 border border-purple-200 text-left">
+          <div className="font-bold text-purple-800">Reverb (RT₆₀ ≈ 1.6s)</div>
+          <div className="text-xs text-slate-600 mt-0.5">Thousands of reflections blurred — large room</div>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AbsorptionCompare() {
+  const materials = [
+    { name: 'Concrete / glass wall',         rt: 2.5, col: 'from-zinc-500 to-slate-600',  nrc: '0.05', desc: 'Highly reflective — live, echoey' },
+    { name: 'Standard office (drywall)',     rt: 1.3, col: 'from-blue-400 to-blue-600',   nrc: '0.20', desc: 'Still too live for speech' },
+    { name: 'PET acoustic panels 25 mm',     rt: 0.8, col: 'from-emerald-500 to-teal-600',nrc: '0.70', desc: 'Target for modern office' },
+    { name: 'PET 25 mm + air gap + wool',    rt: 0.4, col: 'from-purple-500 to-fuchsia-600',nrc:'0.95', desc: 'Studio-grade absorption' }
+  ];
+  const [active, setActive] = useState(null);
+  const play = (m) => {
+    setActive(m.name);
+    const ctx = getAudioCtx();
+    const conv = ctx.createConvolver(); conv.buffer = makeImpulse(m.rt);
+    const wet = ctx.createGain(); wet.gain.value = 0.9;
+    conv.connect(wet); wet.connect(ctx.destination);
+    playClap(); playClap(conv);
+  };
+  return (
+    <div>
+      <p className="text-slate-700">Same room, four different surfaces. Click to clap in each and feel how absorption tames the reverb.</p>
+      <div className="mt-5 space-y-3">
+        {materials.map(m => (
+          <button key={m.name} onClick={() => play(m)}
+                  className={cx('w-full p-4 rounded-xl text-left text-white font-semibold shadow bg-gradient-to-r transition hover:scale-[1.02]', m.col, active === m.name && 'ring-4 ring-white/50')}>
+            <div className="flex justify-between items-start">
+              <div>
+                <div className="font-bold">{m.name}</div>
+                <div className="text-xs opacity-90 mt-0.5">{m.desc}</div>
+              </div>
+              <div className="text-right text-xs">
+                <div className="opacity-80">RT₆₀</div>
+                <div className="font-extrabold text-lg">{m.rt}s</div>
+                <div className="opacity-80 mt-0.5">NRC {m.nrc}</div>
+              </div>
+            </div>
+          </button>
+        ))}
+      </div>
+      <div className="mt-4 text-xs text-slate-600"><b>Pro tip:</b> Layering air gap + wool behind a panel pushes NRC from ~0.7 toward 1.0 without changing the visible finish.</div>
+    </div>
+  );
+}
+
+function NRCCalculator() {
+  const [vals, setVals] = useState({ 250: 0.35, 500: 0.70, 1000: 0.90, 2000: 0.95 });
+  const nrc = Math.round(((vals[250] + vals[500] + vals[1000] + vals[2000]) / 4) * 100) / 100;
+  const klass = nrc >= 0.90 ? 'A' : nrc >= 0.80 ? 'B' : nrc >= 0.60 ? 'C' : nrc >= 0.30 ? 'D' : 'E';
+  const klassColor = { A:'bg-emerald-500', B:'bg-green-500', C:'bg-amber-500', D:'bg-orange-500', E:'bg-red-500' }[klass];
+  return (
+    <div>
+      <p className="text-slate-700">NRC = average of absorption coefficient (α) at 250, 500, 1000 and 2000 Hz. Plug in a test report's values and see the resulting rating.</p>
+      <div className="mt-5 space-y-3">
+        {[250, 500, 1000, 2000].map(f => (
+          <div key={f}>
+            <div className="flex justify-between text-sm"><span className="font-semibold">α at {f} Hz</span><span className="font-mono font-bold text-brand-700">{vals[f].toFixed(2)}</span></div>
+            <input type="range" min="0" max="1" step="0.01" value={vals[f]} onChange={e => setVals(v => ({ ...v, [f]: +e.target.value }))} className="w-full accent-brand-600"/>
+          </div>
+        ))}
+      </div>
+      <div className="mt-6 p-5 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200 text-center">
+        <div className="text-xs uppercase font-bold text-emerald-700">NRC</div>
+        <div className="text-6xl font-extrabold text-emerald-800 mt-1">{nrc.toFixed(2)}</div>
+        <div className={cx('inline-block mt-3 px-3 py-1 rounded-full text-white text-sm font-bold', klassColor)}>Class {klass}</div>
+      </div>
+      <div className="mt-4 text-xs text-slate-600"><b>Typical thresholds:</b> Class A ≥ 0.90 (studio-grade), Class C ≈ 0.60 (good office), Class E ≈ 0.15 (hard surface).</div>
+    </div>
+  );
+}
+
+function IsolationDemo() {
+  const [thickness, setThickness] = useState(12);   // mm wall thickness, proxy for isolation
+  const playMusic = () => {
+    const ctx = getAudioCtx();
+    // Synthesize a short "music" clip: chord of 3 tones
+    const chord = [220, 277, 330];
+    const master = ctx.createGain(); master.gain.value = 0.15;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass';
+    // Thicker / heavier wall cuts more treble.  Map 0–200 mm → 12kHz–120Hz exponentially.
+    const cutoff = Math.max(120, 12000 * Math.pow(0.97, thickness));
+    lp.frequency.value = cutoff;
+    // Also lower gain with thickness
+    master.gain.value = 0.15 * Math.max(0.05, 1 - thickness / 220);
+    chord.forEach(f => {
+      const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f;
+      const g = ctx.createGain(); g.gain.value = 0.3;
+      o.connect(g); g.connect(lp);
+      o.start(); o.stop(ctx.currentTime + 1.5);
+    });
+    lp.connect(master); master.connect(ctx.destination);
+  };
+  const stc = Math.min(65, Math.round(20 + thickness * 0.25));
+  return (
+    <div>
+      <p className="text-slate-700">Mass and density stop sound. Thicker walls cut highs first, then mids, then lows. Adjust the wall and press play.</p>
+      <div className="mt-5 p-5 rounded-xl bg-gradient-to-br from-slate-100 to-zinc-200 border border-slate-300">
+        <div className="flex items-center gap-6">
+          <div className="text-4xl">🧱</div>
+          <div className="flex-1">
+            <div className="flex justify-between text-sm"><span className="font-semibold">Wall thickness</span><span className="font-mono font-bold">{thickness} mm</span></div>
+            <input type="range" min="0" max="200" value={thickness} onChange={e => setThickness(+e.target.value)} className="w-full accent-slate-600"/>
+            <div className="flex justify-between text-[10px] text-slate-500"><span>Curtain</span><span>Drywall</span><span>Plenum double</span><span>Studio</span></div>
+          </div>
+        </div>
+        <div className="text-center mt-4">
+          <button onClick={playMusic} className="px-6 py-3 rounded-xl bg-slate-700 hover:bg-slate-900 text-white font-bold shadow">🔊 Play music on the other side</button>
+        </div>
+        <div className="mt-3 text-center text-sm text-slate-700">Approximate <b>STC ≈ {stc}</b></div>
+      </div>
+      <div className="mt-4 text-xs text-slate-600">
+        <b>STC 25:</b> normal conversation audible · <b>STC 40:</b> raised voice audible · <b>STC 50:</b> loud music faint · <b>STC 60+:</b> studio-grade privacy.
+      </div>
+    </div>
+  );
+}
+
+function InstallSequence() {
+  const correct = [
+    { id: 1, txt: 'Site survey — slab flatness, moisture, entry points' },
+    { id: 2, txt: 'Mark the 600 × 600 grid from a chosen start point' },
+    { id: 3, txt: 'Glue-bond pedestals to slab, check verticality' },
+    { id: 4, txt: 'Level pedestal heads with laser, lock-nut' },
+    { id: 5, txt: 'Install stringers between pedestal heads' },
+    { id: 6, txt: 'Route cables, HVAC, services in the plenum' },
+    { id: 7, txt: 'Lay panels from corner, cut perimeter' },
+    { id: 8, txt: 'Install grommets + air plugs, apply edge trim' }
+  ];
+  const [order, setOrder] = useState(() => [...correct].sort(() => Math.random() - 0.5));
+  const [checked, setChecked] = useState(false);
+  const swap = (i, di) => {
+    const j = i + di; if (j < 0 || j >= order.length) return;
+    const n = [...order]; [n[i], n[j]] = [n[j], n[i]]; setOrder(n);
+  };
+  const score = order.filter((o, i) => o.id === correct[i].id).length;
+  return (
+    <div>
+      <p className="text-slate-700">Put these installation steps in the correct order. Use the arrows to move each card.</p>
+      <div className="mt-5 space-y-2">
+        {order.map((o, i) => {
+          const right = checked && o.id === correct[i].id;
+          const wrong = checked && o.id !== correct[i].id;
+          return (
+            <div key={o.id} className={cx('p-3 rounded-lg border-2 flex items-center gap-3',
+              !checked && 'bg-white border-slate-200',
+              right && 'bg-emerald-50 border-emerald-300',
+              wrong && 'bg-red-50 border-red-300')}>
+              <div className="w-7 h-7 rounded-full bg-slate-700 text-white font-bold flex items-center justify-center text-sm">{i+1}</div>
+              <div className="flex-1 text-sm">{o.txt}</div>
+              <div className="flex flex-col gap-0.5">
+                <button onClick={() => swap(i, -1)} disabled={i === 0} className="w-7 h-7 rounded hover:bg-slate-100 disabled:opacity-30">▲</button>
+                <button onClick={() => swap(i,  1)} disabled={i === order.length-1} className="w-7 h-7 rounded hover:bg-slate-100 disabled:opacity-30">▼</button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-4 flex items-center gap-3">
+        <button onClick={() => setChecked(true)} className="btn-primary">Check sequence</button>
+        {checked && (
+          <div className={cx('px-3 py-2 rounded-lg font-bold', score === correct.length ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800')}>
+            {score}/{correct.length} correct
+          </div>
+        )}
+        <button onClick={() => { setOrder([...correct].sort(() => Math.random() - 0.5)); setChecked(false); }} className="text-sm underline text-brand-700 ml-auto">Shuffle & retry</button>
+      </div>
+    </div>
+  );
+}
+
+function RafAnatomyQuiz() {
+  const questions = [
+    { q: 'Which part bears the load from the panel to the slab?', options: ['Stringer', 'Pedestal', 'Grommet', 'Finish'], correct: 1 },
+    { q: 'What sits on top of the pedestal and forms the walkable floor?', options: ['Pedestal', 'Panel', 'Stringer', 'Slab'], correct: 1 },
+    { q: 'Which component adds lateral stability above 300 mm height?', options: ['Stringer', 'Panel', 'Grommet', 'Finish'], correct: 0 },
+    { q: 'Where does HVAC cold air flow in an RAF system?', options: ['Above the ceiling', 'In the under-floor plenum', 'Inside the panel', 'Outside the building'], correct: 1 },
+    { q: 'Which accessory seals a cable cutout while letting cables pass through?', options: ['Air plug', 'Grommet', 'Bridge', 'Ramp shoe'], correct: 1 }
+  ];
+  const [i, setI] = useState(0); const [picked, setPicked] = useState(null); const [score, setScore] = useState(0);
+  const q = questions[i];
+  if (!q) return (
+    <div className="text-center py-6">
+      <div className="text-5xl mb-2">🏆</div>
+      <div className="text-2xl font-bold">Score: {score} / {questions.length}</div>
+      <button onClick={() => { setI(0); setScore(0); setPicked(null); }} className="btn-primary mt-4">Try again</button>
+    </div>
+  );
+  const pick = (idx) => {
+    setPicked(idx);
+    if (idx === q.correct) setScore(s => s + 1);
+    setTimeout(() => { setPicked(null); setI(i + 1); }, 800);
+  };
+  return (
+    <div>
+      <div className="text-xs text-slate-500 mb-1">Question {i+1} of {questions.length}</div>
+      <div className="font-bold text-lg">{q.q}</div>
+      <div className="mt-4 grid gap-2">
+        {q.options.map((o, idx) => {
+          const right = picked !== null && idx === q.correct;
+          const wrong = picked === idx && idx !== q.correct;
+          return (
+            <button key={idx} onClick={() => picked === null && pick(idx)} disabled={picked !== null}
+                    className={cx('p-3 rounded-lg border-2 text-left font-medium',
+                      right && 'bg-emerald-100 border-emerald-500',
+                      wrong && 'bg-red-100 border-red-500',
+                      picked === null && 'bg-white border-slate-200 hover:border-brand-400')}>
+              {String.fromCharCode(65 + idx)}. {o}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// Exercise registry — keyed by SEED_EXERCISES entries
+const EXERCISES = {
+  'hearing-range':      { id: 'hearing-range',      icon: '👂',  title: 'Hearing Range Test',   hint: 'Find the edges of your audible range',        component: HearingRangeTest },
+  'loudness-db':        { id: 'loudness-db',        icon: '🔊',  title: 'dB Addition Lab',       hint: 'Why 60+60 dB ≠ 120 dB',                        component: LoudnessDBLab },
+  'pitch-compare':      { id: 'pitch-compare',      icon: '🎵',  title: 'Pitch Discrimination', hint: 'Train your ear for small pitch gaps',         component: PitchCompare },
+  'reverb-demo':        { id: 'reverb-demo',        icon: '🏟️', title: 'Reverb (RT₆₀) Explorer',hint: 'Hear studios, offices and halls',            component: ReverbDemo },
+  'echo-vs-reverb':     { id: 'echo-vs-reverb',     icon: '⏱️', title: 'Echo vs Reverb',        hint: 'Distinct copy vs blurred reflections',        component: EchoVsReverb },
+  'absorption-compare': { id: 'absorption-compare', icon: '🧊',  title: 'Absorption A/B',        hint: 'Four materials, same room',                   component: AbsorptionCompare },
+  'nrc-calculator':     { id: 'nrc-calculator',     icon: '📈',  title: 'NRC Calculator',        hint: 'Compute NRC from α values',                   component: NRCCalculator },
+  'isolation-demo':     { id: 'isolation-demo',     icon: '🧱',  title: 'Wall Isolation Lab',    hint: 'Thicker wall → less sound through',           component: IsolationDemo },
+  'install-sequence':   { id: 'install-sequence',   icon: '🪜',  title: 'Install Sequence',      hint: 'Order the 8 install steps',                   component: InstallSequence },
+  'raf-anatomy-quiz':   { id: 'raf-anatomy-quiz',   icon: '🔍',  title: 'Name that Part',        hint: 'Quick 5-Q RAF parts quiz',                    component: RafAnatomyQuiz }
+};
 
 function ResourcePanel({ course }) {
   const [open, setOpen] = useState(true);
@@ -926,19 +1673,32 @@ function ResourcePanel({ course }) {
 function LessonRenderer({ course, lesson, onDone }) {
   if (!lesson) return null;
   const t = lesson.type;
-  if (t === 'reading') return <ReadingLesson lesson={lesson}/>;
+  if (t === 'reading') return <ReadingLesson lesson={lesson} course={course}/>;
   if (t === 'flashcards') return <FlashcardsLesson lesson={lesson}/>;
   if (t === 'match') return <MatchLesson course={course}/>;
   if (t === 'hotspot') return <HotspotLesson course={course}/>;
   if (t === 'quiz') return <QuizLesson course={course} onDone={onDone}/>;
-  return <ReadingLesson lesson={lesson}/>;
+  return <ReadingLesson lesson={lesson} course={course}/>;
 }
 
-function ReadingLesson({ lesson }) {
+function ReadingLesson({ lesson, course }) {
+  // Pick hero theme: explicit lesson.hero > division-based default
+  const theme = lesson.hero
+    || (course?.division === 'univicoustic' ? 'hero-acoustic' : course?.division === 'unitile' ? 'hero-tile' : 'hero-sound');
+  const emojiFromTitle = lesson.title?.match(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/u)?.[0];
+  const icon = lesson.icon || emojiFromTitle || (course?.thumbnail) || '📘';
+  const kicker = course?.title?.split('—')?.[0]?.trim() || 'Lesson';
   return (
     <article>
-      <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900">{lesson.title}</h1>
-      <div className="prose-lesson mt-4" dangerouslySetInnerHTML={{ __html: lesson.body || '' }}/>
+      <div className={cx('lesson-hero', theme)}>
+        <div className="hero-icon">{icon}</div>
+        <div className="hero-text">
+          <div className="hero-kicker">{kicker}</div>
+          <h1>{lesson.title}</h1>
+          {lesson.subtitle && <div className="hero-sub">{lesson.subtitle}</div>}
+        </div>
+      </div>
+      <div className="prose-lesson mt-2" dangerouslySetInnerHTML={{ __html: lesson.body || '' }}/>
     </article>
   );
 }
@@ -2172,6 +2932,10 @@ style.textContent = `
   .line-clamp-2 { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
 `;
 document.head.appendChild(style);
+
+// Pick provider based on whether Supabase keys are configured.
+// No config → demo mode (localStorage) so the app still works locally.
+const AppProvider = supa ? SupabaseAppProvider : DemoAppProvider;
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(<AppProvider><AppRoot/></AppProvider>);

@@ -1844,6 +1844,92 @@ window.SEED_COURSES = [
   }
 ];
 
+// ========== YouTube Video Suggestions (admin-editable) ==========
+// Each entry has a title + duration + either `ytId` (11-char YouTube video ID)
+// or a `query` (YouTube search). The UI falls back to a styled placeholder
+// thumbnail if a real ytId is not provided, so the panel always looks good.
+window.SEED_VIDEOS = {
+  'uti-1': [
+    { title: 'Raised access floor explained — overview', query: 'raised access floor explained', duration: '5:20', topic: 'floor' },
+    { title: 'Why data centers use raised floors', query: 'why data centers use raised floor cooling', duration: '7:15', topic: 'datacenter' },
+    { title: 'Inside a modern data center build', query: 'modern data center construction tour', duration: '12:40', topic: 'datacenter' }
+  ],
+  'uti-2': [
+    { title: 'Data center design fundamentals', query: 'data center design fundamentals beginners', duration: '9:12', topic: 'datacenter' },
+    { title: 'How trading floors are built', query: 'how financial trading floor is built', duration: '6:30', topic: 'office' },
+    { title: 'Cleanroom basics — what and why', query: 'cleanroom explained basics', duration: '8:05', topic: 'cleanroom' }
+  ],
+  'uti-3': [
+    { title: 'Calcium sulphate vs steel RAF panels', query: 'calcium sulphate vs steel raised access floor panel', duration: '4:50', topic: 'floor' },
+    { title: 'Airflow grille + cold aisle animation', query: 'data center airflow grille cold aisle animation', duration: '3:40', topic: 'airflow' },
+    { title: 'Cable management best practices', query: 'data center cable management best practices', duration: '11:25', topic: 'cable' },
+    { title: 'Ceiling tile systems — grid vs structural', query: 'suspended ceiling grid systems explained', duration: '8:12', topic: 'ceiling' }
+  ],
+  'uti-4': [
+    { title: 'Understanding floor load ratings', query: 'raised floor load rating explained concentrated UDL', duration: '6:48', topic: 'load' },
+    { title: 'ESD (electrostatic) basics for data centers', query: 'ESD electrostatic discharge data center explained', duration: '7:30', topic: 'esd' },
+    { title: 'Fire resistance testing — BS 476 & ASTM E84', query: 'BS 476 ASTM E84 flame spread test', duration: '5:22', topic: 'fire' }
+  ],
+  'uti-5': [
+    { title: 'Step-by-step raised floor installation', query: 'step by step raised access floor installation', duration: '14:10', topic: 'install' },
+    { title: 'Site survey & floor flatness check', query: 'floor flatness measurement site survey', duration: '5:40', topic: 'install' },
+    { title: 'Cold aisle containment walkthrough', query: 'cold aisle containment data center walkthrough', duration: '9:55', topic: 'datacenter' }
+  ],
+  'uva-1': [
+    { title: 'What is sound? — TED-Ed', query: 'TED-Ed what is sound', duration: '4:52', topic: 'sound' },
+    { title: 'Sound waves explained — animated', query: 'sound waves animation compression rarefaction', duration: '3:45', topic: 'wave' },
+    { title: 'Why do things sound different? — Veritasium', query: 'Veritasium why things sound different', duration: '8:18', topic: 'sound' },
+    { title: 'Decibels, explained simply', query: 'decibel scale explained simply', duration: '5:10', topic: 'db' },
+    { title: 'Reverberation vs echo', query: 'reverberation vs echo difference explained', duration: '4:25', topic: 'echo' }
+  ],
+  'uva-2': [
+    { title: 'How acoustic panels actually work', query: 'how acoustic panels work sound absorption', duration: '7:38', topic: 'panel' },
+    { title: 'NRC rating explained', query: 'NRC noise reduction coefficient explained', duration: '5:40', topic: 'nrc' },
+    { title: 'Porous vs resonant absorbers', query: 'porous resonant absorber acoustic difference', duration: '6:12', topic: 'absorber' },
+    { title: 'Impedance tube test demonstration', query: 'impedance tube acoustic test demonstration', duration: '8:50', topic: 'test' },
+    { title: 'Reverberation room test — ISO 354', query: 'ISO 354 reverberation room test acoustic', duration: '7:05', topic: 'test' }
+  ],
+  'uva-3': [
+    { title: 'The business of office acoustics', query: 'office acoustic market trends workplace', duration: '9:40', topic: 'market' },
+    { title: 'WELL Building Standard — sound feature', query: 'WELL Building Standard sound feature acoustic', duration: '6:20', topic: 'market' },
+    { title: 'LEED + GreenPro for interiors', query: 'LEED GreenPro acoustic product certification', duration: '8:15', topic: 'green' }
+  ],
+  'uva-4': [
+    { title: 'Acoustic panel installation demo', query: 'PET acoustic panel installation demo', duration: '6:55', topic: 'install' },
+    { title: 'Printed acoustic wall (brand wall) walkthrough', query: 'printed acoustic wall branded office demo', duration: '4:48', topic: 'panel' },
+    { title: 'Baffles for open-plan offices', query: 'acoustic baffles open plan office', duration: '5:30', topic: 'baffle' },
+    { title: 'Wood-look acoustic panels — Woodscape style', query: 'wood acoustic panels office boardroom', duration: '7:22', topic: 'wood' }
+  ],
+  'uva-5': [
+    { title: 'Reading a sound absorption test report', query: 'how to read sound absorption test report NRC', duration: '8:40', topic: 'nrc' },
+    { title: 'EPD for construction products', query: 'Environmental Product Declaration EPD construction', duration: '6:10', topic: 'green' },
+    { title: 'ASTM E84 fire test walkthrough', query: 'ASTM E84 fire test tunnel walkthrough', duration: '5:45', topic: 'fire' }
+  ],
+  'uva-6': [
+    { title: 'CNC grooving MDF — production tips', query: 'CNC grooving MDF acoustic production', duration: '9:20', topic: 'production' },
+    { title: 'Acoustic panel handling and storage', query: 'acoustic panel handling storage guidelines', duration: '4:15', topic: 'storage' },
+    { title: 'Dealer onboarding best practices', query: 'B2B dealer onboarding process best practices', duration: '7:50', topic: 'sales' },
+    { title: 'Installing stretched fabric acoustic wall', query: 'stretched fabric acoustic wall system install', duration: '10:35', topic: 'install' }
+  ],
+  'uva-7': [
+    { title: 'Behind-the-scenes: custom printed acoustic art', query: 'custom printed acoustic wall art mural', duration: '5:12', topic: 'panel' },
+    { title: 'Design inspiration: acoustic hospitality interiors', query: 'hospitality acoustic interior design inspiration', duration: '8:30', topic: 'design' },
+    { title: 'Auditorium acoustic fabric system — case study', query: 'auditorium fabric acoustic system case study', duration: '11:00', topic: 'auditorium' }
+  ]
+};
+
+// ========== Interactive sound/physics exercises per course ==========
+// These map to React components defined in app.js (see EXERCISES registry).
+window.SEED_EXERCISES = {
+  'uti-1':  ['raf-anatomy-quiz'],
+  'uti-3':  ['raf-anatomy-quiz'],
+  'uti-5':  ['install-sequence'],
+  'uva-1':  ['hearing-range', 'loudness-db', 'pitch-compare', 'reverb-demo', 'echo-vs-reverb'],
+  'uva-2':  ['absorption-compare', 'nrc-calculator', 'isolation-demo'],
+  'uva-4':  ['absorption-compare', 'reverb-demo'],
+  'uva-6':  ['install-sequence']
+};
+
 // ========== Reference Materials (source PPTs / PDFs / SOPs) ==========
 // These are the original training materials from the uploaded folders.
 // File paths are served from unitile-lms/training-data/ by the dev server.

@@ -25,6 +25,89 @@ body { font-family: 'Inter', system-ui, sans-serif; }
 .prose-lesson .timeline .evt { position: relative; padding: 0.5rem 0 0.5rem 0; }
 .prose-lesson .timeline .evt::before { content: ''; position: absolute; left: -1.4rem; top: 1rem; width: 10px; height: 10px; border-radius: 50%; background: #1f3bf5; border: 2px solid #fff; box-shadow: 0 0 0 2px #1f3bf5; }
 .prose-lesson .timeline .evt .yr { font-weight: 700; color: #1f3bf5; font-size: 0.82rem; }
+
+/* Lesson hero — colorful gradient banner at top of each lesson */
+.lesson-hero {
+  display: flex; align-items: center; gap: 1rem;
+  padding: 1.25rem 1.5rem; border-radius: 14px;
+  background: linear-gradient(135deg, #1f3bf5 0%, #7c3aed 50%, #ec4899 100%);
+  color: #fff; box-shadow: 0 10px 30px -10px rgba(31, 59, 245, 0.3);
+  margin-bottom: 1.5rem;
+}
+.lesson-hero.hero-acoustic { background: linear-gradient(135deg, #0fa36b 0%, #0891b2 50%, #1d4ed8 100%); }
+.lesson-hero.hero-tile     { background: linear-gradient(135deg, #e85a1a 0%, #c2410c 50%, #7c2d12 100%); }
+.lesson-hero.hero-sound    { background: linear-gradient(135deg, #7c3aed 0%, #2563eb 50%, #06b6d4 100%); }
+.lesson-hero.hero-install  { background: linear-gradient(135deg, #ea580c 0%, #eab308 100%); }
+.lesson-hero.hero-market   { background: linear-gradient(135deg, #059669 0%, #0891b2 100%); }
+.lesson-hero.hero-cert     { background: linear-gradient(135deg, #d97706 0%, #dc2626 100%); }
+.lesson-hero .hero-icon { font-size: 2.5rem; filter: drop-shadow(0 2px 6px rgba(0,0,0,0.2)); }
+.lesson-hero .hero-text { flex: 1; }
+.lesson-hero .hero-kicker { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.85; }
+.lesson-hero h1 { font-size: 1.4rem !important; font-weight: 800 !important; margin: 0.15rem 0 0 !important; color: #fff !important; }
+.lesson-hero .hero-sub { font-size: 0.85rem; opacity: 0.9; margin-top: 0.25rem; }
+
+/* Colored callouts */
+.prose-lesson .callout { position: relative; background: #eef4ff; border-left: 4px solid #1f3bf5; padding: 0.9rem 1rem 0.9rem 2.5rem; border-radius: 6px; margin: 1rem 0; }
+.prose-lesson .callout::before { position: absolute; left: 0.75rem; top: 0.85rem; font-size: 1.05rem; }
+.prose-lesson .callout { content: ""; }
+.prose-lesson .callout::before { content: "💡"; }
+.prose-lesson .callout.warning { background: #fff7ed; border-left-color: #ea580c; }
+.prose-lesson .callout.warning::before { content: "⚠️"; }
+.prose-lesson .callout.success { background: #ecfdf5; border-left-color: #059669; }
+.prose-lesson .callout.success::before { content: "✅"; }
+.prose-lesson .callout.fact    { background: #fdf4ff; border-left-color: #a855f7; }
+.prose-lesson .callout.fact::before    { content: "🔬"; }
+.prose-lesson .callout.story   { background: #fefce8; border-left-color: #eab308; }
+.prose-lesson .callout.story::before   { content: "📖"; }
+.prose-lesson .callout.tryit   { background: #fce7f3; border-left-color: #ec4899; }
+.prose-lesson .callout.tryit::before   { content: "🎯"; }
+
+/* Key term chips */
+.prose-lesson .chip { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #eef4ff; color: #1f3bf5; font-size: 0.78rem; font-weight: 600; margin: 0 2px; }
+.prose-lesson .chip.chip-tile { background: #fff1eb; color: #c2410c; }
+.prose-lesson .chip.chip-green { background: #ecfdf5; color: #047857; }
+.prose-lesson .chip.chip-purple { background: #faf5ff; color: #7c3aed; }
+
+/* Better tables */
+.prose-lesson table { box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05); border-radius: 8px; overflow: hidden; border: 1px solid #e2e8f0; }
+.prose-lesson th { background: linear-gradient(to bottom, #f8fafc, #f1f5f9); }
+.prose-lesson tr:nth-child(even) td { background: #fafbfc; }
+.prose-lesson tr:hover td { background: #eef4ff; }
+
+/* Stat-card variations (colorful) */
+.prose-lesson .stat-card.sc-brand { background: linear-gradient(135deg, #eef4ff 0%, #dbeafe 100%); border-color: #bfdbfe; }
+.prose-lesson .stat-card.sc-brand .n { color: #1d4ed8; }
+.prose-lesson .stat-card.sc-green { background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%); border-color: #a7f3d0; }
+.prose-lesson .stat-card.sc-green .n { color: #047857; }
+.prose-lesson .stat-card.sc-amber { background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%); border-color: #fde68a; }
+.prose-lesson .stat-card.sc-amber .n { color: #b45309; }
+.prose-lesson .stat-card.sc-pink { background: linear-gradient(135deg, #fdf2f8 0%, #fce7f3 100%); border-color: #fbcfe8; }
+.prose-lesson .stat-card.sc-pink .n { color: #be185d; }
+.prose-lesson .stat-card.sc-purple { background: linear-gradient(135deg, #faf5ff 0%, #ede9fe 100%); border-color: #ddd6fe; }
+.prose-lesson .stat-card.sc-purple .n { color: #6d28d9; }
+
+/* Did-you-know banner */
+.prose-lesson .dyk {
+  display: flex; gap: 0.75rem; align-items: flex-start;
+  padding: 1rem; margin: 1rem 0; border-radius: 12px;
+  background: linear-gradient(135deg, #fff1f2 0%, #ffe4e6 50%, #fce7f3 100%);
+  border: 1px solid #fecdd3;
+}
+.prose-lesson .dyk .icon { font-size: 1.75rem; line-height: 1; }
+.prose-lesson .dyk .title { font-weight: 700; color: #be185d; font-size: 0.85rem; letter-spacing: 0.03em; text-transform: uppercase; }
+.prose-lesson .dyk .body  { color: #881337; font-size: 0.92rem; margin-top: 0.25rem; }
+
+/* Animated video placeholder thumb */
+@keyframes pulse-play { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+.yt-play-btn { animation: pulse-play 2.5s ease-in-out infinite; }
+
+/* Audio exercise meter */
+.meter {
+  height: 8px; background: linear-gradient(to right, #10b981 0%, #10b981 60%, #eab308 80%, #ef4444 100%);
+  border-radius: 4px; position: relative; overflow: hidden;
+}
+.meter .fill { position: absolute; top: 0; left: 0; bottom: 0; background: rgba(255,255,255,0.6); transition: width 0.1s; }
+
 .prose-lesson .callout { background: #eef4ff; border-left: 4px solid #1f3bf5; padding: 0.75rem 1rem; border-radius: 6px; margin: 1rem 0; }
 .prose-lesson .callout.warning { background: #fff7ed; border-left-color: #ea580c; }
 .prose-lesson .callout.success { background: #ecfdf5; border-left-color: #059669; }
